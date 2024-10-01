@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from pathlib import Path
-from typing import Union, Optional
+from typing import Dict, Union, Optional
 
 import numpy as np
 import open3d as o3d
@@ -13,7 +13,7 @@ class GroundRemoval:
     def __init__(
         self,
         data_dir: Union[str, Path],
-        save_dir: Optional[Union[str, Path]],
+        save_dir: Optional[Union[str, Path]] = None,
         verbose: bool = False,
         visualize: bool = False,
     ):
@@ -98,16 +98,21 @@ class GroundRemoval:
             self.patchwork.getNonground(),
         )
 
-    def run(self):
-        for pcd_path in self.data_dir.glob("*.npz"):
+    def run(self) -> Dict[str, np.ndarray]:
+        nonground = {}
+        for pcd_path in sorted(self.data_dir.glob("*.npz")):
             pcd = self._read_pcd(pcd_path)
             self.patchwork.estimateGround(pcd)
+
+            nonground[pcd_path.stem] = self.patchwork.getNonground()
 
             if self.visualize:
                 self._visualize()
 
             if self.save_dir is not None:
                 self._save_results(pcd_path.stem)
+
+        return nonground
 
 
 if __name__ == "__main__":
@@ -137,4 +142,4 @@ if __name__ == "__main__":
         args.data_dir, args.save_dir, args.debug, args.visualize
     )
 
-    ground_removal.run()
+    nonground = ground_removal.run()
