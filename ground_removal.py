@@ -19,6 +19,7 @@ class GroundRemoval:
     ):
         params = pypatchworkpp.Parameters()
         params.verbose = verbose
+        params.enable_RNR = False
 
         self.patchwork = pypatchworkpp.patchworkpp(params)
         self.data_dir = Path(data_dir)
@@ -58,7 +59,7 @@ class GroundRemoval:
         ground_o3d.points = o3d.utility.Vector3dVector(ground)
         ground_o3d.colors = o3d.utility.Vector3dVector(
             np.array(
-                [[0.0, 1.0, 0.0] for _ in range(ground.shape[0])], dtype=float
+                [[1.0, 0.0, 0.0] for _ in range(ground.shape[0])], dtype=float
             )  # RGB
         )
 
@@ -66,7 +67,7 @@ class GroundRemoval:
         nonground_o3d.points = o3d.utility.Vector3dVector(nonground)
         nonground_o3d.colors = o3d.utility.Vector3dVector(
             np.array(
-                [[1.0, 0.0, 0.0] for _ in range(nonground.shape[0])], dtype=float
+                [[0.0, 1.0, 0.0] for _ in range(nonground.shape[0])], dtype=float
             )  # RGB
         )
 
@@ -75,7 +76,7 @@ class GroundRemoval:
         centers_o3d.normals = o3d.utility.Vector3dVector(normals)
         centers_o3d.colors = o3d.utility.Vector3dVector(
             np.array(
-                [[1.0, 1.0, 0.0] for _ in range(centers.shape[0])], dtype=float
+                [[0.0, 0.0, 1.0] for _ in range(centers.shape[0])], dtype=float
             )  # RGB
         )
 
