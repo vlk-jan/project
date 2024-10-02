@@ -4,6 +4,7 @@
 from pathlib import Path
 from typing import Dict, Union, Optional
 
+import tqdm
 import numpy as np
 import open3d as o3d
 import pypatchworkpp
@@ -28,9 +29,8 @@ class GroundRemoval:
 
     def _read_pcd(self, pcd_path: Union[str, Path]) -> np.ndarray:
         pcd = np.load(pcd_path, allow_pickle=True)["arr_0"].item()
-        pcd = pcd["pc"][:, :3]
 
-        return pcd
+        return pcd["pc"]
 
     def _visualize(self):
         ground = self.patchwork.getGround()
@@ -88,21 +88,18 @@ class GroundRemoval:
         vis.run()
         vis.destroy_window()
 
-    def _save_results(self, file_name: Union[str, Path]):
+    def _save_results(self, pcd: np.ndarray, file_name: Union[str, Path]):
         self.save_dir.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
-            self.save_dir / f"{file_name}_ground.npz",
-            self.patchwork.getGround(),
-        )
-        np.savez_compressed(
             self.save_dir / f"{file_name}_nonground.npz",
-            self.patchwork.getNonground(),
+            pcd[self.patchwork.getNongroundIndices()],
         )
 
     def run(self) -> Dict[str, np.ndarray]:
         nonground = {}
-        for pcd_path in sorted(self.data_dir.glob("*.npz")):
-            pcd = self._read_pcd(pcd_path)
+        for pcd_path in tqdm.tqdm(sorted(self.data_dir.glob("*.npz"))):
+            full_pcd = self._read_pcd(pcd_path)
+            pcd = full_pcd[:, :3]
             self.patchwork.estimateGround(pcd)
 
             nonground[pcd_path.stem] = self.patchwork.getNonground()
@@ -111,7 +108,7 @@ class GroundRemoval:
                 self._visualize()
 
             if self.save_dir is not None:
-                self._save_results(pcd_path.stem)
+                self._save_results(full_pcd, pcd_path.stem)
 
         return nonground
 
