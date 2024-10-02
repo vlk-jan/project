@@ -28,11 +28,24 @@ class GroundRemoval:
         self.visualize = visualize
 
     def _read_pcd(self, pcd_path: Union[str, Path]) -> np.ndarray:
+        """
+        Read a point cloud file and return the point cloud data,
+        it is prepared for the data format of scala3 dataset provided by Valeo
+
+        :param Union[str,Path] pcd_path:
+            Path to the point cloud file
+
+        :return: np.ndarray:
+            Point cloud data
+        """
         pcd = np.load(pcd_path, allow_pickle=True)["arr_0"].item()
 
         return pcd["pc"]
 
-    def _visualize(self):
+    def _visualize(self) -> None:
+        """
+        Visualize the ground and nonground points along with the surface normals
+        """
         ground = self.patchwork.getGround()
         nonground = self.patchwork.getNonground()
         time_taken = self.patchwork.getTimeTaken()
@@ -88,7 +101,15 @@ class GroundRemoval:
         vis.run()
         vis.destroy_window()
 
-    def _save_results(self, pcd: np.ndarray, file_name: Union[str, Path]):
+    def _save_results(self, pcd: np.ndarray, file_name: Union[str, Path]) -> None:
+        """
+        Save the nonground points to a file
+
+        :param np.ndarray pcd:
+            Point cloud data
+        :param Union[str,Path] file_name:
+            Name of the file to save the nonground points
+        """
         self.save_dir.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
             self.save_dir / f"{file_name}_nonground.npz",
@@ -96,6 +117,12 @@ class GroundRemoval:
         )
 
     def run(self) -> Dict[str, np.ndarray]:
+        """
+        Run the ground removal algorithm
+
+        :return Dict[str, np.ndarray]:
+            Nonground points for all frames
+        """
         nonground = {}
         for pcd_path in tqdm.tqdm(sorted(self.data_dir.glob("*.npz"))):
             full_pcd = self._read_pcd(pcd_path)
