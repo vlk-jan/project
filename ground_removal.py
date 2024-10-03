@@ -101,20 +101,20 @@ class GroundRemoval:
         vis.run()
         vis.destroy_window()
 
-    def _save_results(self, pcd: np.ndarray, file_name: Union[str, Path]) -> None:
-        """
-        Save the nonground points to a file
-
-        :param np.ndarray pcd:
-            Point cloud data
-        :param Union[str,Path] file_name:
-            Name of the file to save the nonground points
-        """
-        self.save_dir.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(
-            self.save_dir / f"{file_name}_nonground.npz",
-            pcd[self.patchwork.getNongroundIndices()],
-        )
+    # def _save_results(self, pcd: np.ndarray, file_name: Union[str, Path]) -> None:
+    #     """
+    #     Save the nonground points to a file
+    #
+    #     :param np.ndarray pcd:
+    #         Point cloud data
+    #     :param Union[str,Path] file_name:
+    #         Name of the file to save the nonground points
+    #     """
+    #     self.save_dir.mkdir(parents=True, exist_ok=True)
+    #     np.savez_compressed(
+    #         self.save_dir / f"{file_name}_nonground.npz",
+    #         pcd[self.patchwork.getNongroundIndices()],
+    #     )
 
     def _save_xyz(self, file_name: Union[str, Path]) -> None:
         """
@@ -123,7 +123,11 @@ class GroundRemoval:
         :param Union[str,Path] file_name:
             Name of the file to save the nonground points
         """
-        save_dir = self.data_dir.parent / (self.data_dir.stem + "_xyz")
+        save_dir = (
+            self.save_dir
+            if self.save_dir is not None
+            else self.data_dir.parent / (self.data_dir.stem + "_xyz")
+        )
         save_dir.mkdir(parents=True, exist_ok=True)
         np.savetxt(
             save_dir / f"{file_name}_nonground.xyz",
@@ -131,29 +135,21 @@ class GroundRemoval:
             fmt="%.6f",
         )
 
-    def run(self) -> Dict[str, np.ndarray]:
+    def run(self) -> None:
         """
-        Run the ground removal algorithm
-
-        :return Dict[str, np.ndarray]:
-            Nonground points for all frames
+        Run the ground removal algorithm, save the results as .xyz files
         """
-        nonground = {}
         for pcd_path in tqdm.tqdm(sorted(self.data_dir.glob("*.npz"))):
             full_pcd = self._read_pcd(pcd_path)
             pcd = full_pcd[:, :3]
             self.patchwork.estimateGround(pcd)
 
-            nonground[pcd_path.stem] = self.patchwork.getNonground()
-
             if self.visualize:
                 self._visualize()
 
-            if self.save_dir is not None:
-                self._save_results(full_pcd, pcd_path.stem)
+            # if self.save_dir is not None:
+            #     self._save_results(full_pcd, pcd_path.stem)
             self._save_xyz(pcd_path.stem)
-
-        return nonground
 
 
 if __name__ == "__main__":
@@ -168,7 +164,11 @@ if __name__ == "__main__":
             required=True,
             help="Path to the directory containing point clouds",
         )
-        parser.add_argument("--save_dir", type=str, help="Path to save the results")
+        parser.add_argument(
+            "--save_dir",
+            type=str,
+            help="Path to save the results, if not specified, the results will be saved in <data_dir>_xyz",
+        )
         parser.add_argument(
             "-d", "--debug", action="store_true", help="Print verbose messages"
         )
