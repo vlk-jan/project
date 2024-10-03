@@ -6,5 +6,6 @@
 *.ini
 
 results/*
+kiss_icp.yml
 
 .DS_Store
