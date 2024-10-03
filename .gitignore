@@ -3,6 +3,8 @@
 *.gif
 *.png
 
+*.ini
+
 results/*
 
 .DS_Store
