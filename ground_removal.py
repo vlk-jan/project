@@ -116,6 +116,21 @@ class GroundRemoval:
             pcd[self.patchwork.getNongroundIndices()],
         )
 
+    def _save_xyz(self, file_name: Union[str, Path]) -> None:
+        """
+        Save the nonground points to a file in XYZ format
+
+        :param Union[str,Path] file_name:
+            Name of the file to save the nonground points
+        """
+        save_dir = self.data_dir.parent / (self.data_dir.stem + "_xyz")
+        save_dir.mkdir(parents=True, exist_ok=True)
+        np.savetxt(
+            save_dir / f"{file_name}_nonground.xyz",
+            self.patchwork.getNonground(),
+            fmt="%.6f",
+        )
+
     def run(self) -> Dict[str, np.ndarray]:
         """
         Run the ground removal algorithm
@@ -136,6 +151,7 @@ class GroundRemoval:
 
             if self.save_dir is not None:
                 self._save_results(full_pcd, pcd_path.stem)
+            self._save_xyz(pcd_path.stem)
 
         return nonground
 

@@ -3,4 +3,6 @@
 *.gif
 *.png
 
+results/*
+
 .DS_Store
