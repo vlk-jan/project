@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from pathlib import Path
-from typing import Dict, Union, Optional
+from typing import Union, Optional
 
 import tqdm
 import numpy as np
