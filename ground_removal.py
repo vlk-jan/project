@@ -101,21 +101,6 @@ class GroundRemoval:
         vis.run()
         vis.destroy_window()
 
-    # def _save_results(self, pcd: np.ndarray, file_name: Union[str, Path]) -> None:
-    #     """
-    #     Save the nonground points to a file
-    #
-    #     :param np.ndarray pcd:
-    #         Point cloud data
-    #     :param Union[str,Path] file_name:
-    #         Name of the file to save the nonground points
-    #     """
-    #     self.save_dir.mkdir(parents=True, exist_ok=True)
-    #     np.savez_compressed(
-    #         self.save_dir / f"{file_name}_nonground.npz",
-    #         pcd[self.patchwork.getNongroundIndices()],
-    #     )
-
     def _save_xyz(self, file_name: Union[str, Path]) -> None:
         """
         Save the nonground points to a file in XYZ format
@@ -147,9 +132,24 @@ class GroundRemoval:
             if self.visualize:
                 self._visualize()
 
-            # if self.save_dir is not None:
-            #     self._save_results(full_pcd, pcd_path.stem)
             self._save_xyz(pcd_path.stem)
+
+    def run_individual(self, file_name: str) -> np.ndarray:
+        """
+        Run the ground removal algorithm on a single point cloud file
+
+        :param str file_name:
+            Name of the point cloud file
+
+        :return: np.ndarray:
+            Nonground points
+        """
+        full_pcd = self._read_pcd(self.data_dir / file_name)
+        pcd = full_pcd[:, :3]
+
+        self.patchwork.estimateGround(pcd)
+
+        return self.patchwork.getNonground()
 
 
 if __name__ == "__main__":

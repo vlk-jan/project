@@ -6,6 +6,8 @@ import argparse
 import fileinput
 from pathlib import Path
 
+from ground_removal import GroundRemoval
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -68,9 +70,8 @@ def main(args: argparse.Namespace) -> None:
     )
 
     if args.gen_nonground or not nonground_dir.exists():
-        from ground_removal import GroundRemoval
-
         print("Generating nonground points")
+
         ground_removal = GroundRemoval(args.data_dir)
         ground_removal.run()
 
