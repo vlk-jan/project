@@ -37,7 +37,7 @@ def parse_args():
 
 
 class GroundRemoval:
-    def __init__(self, args: argparse.Namespace):
+    def __init__(self, args: argparse.Namespace, standalone: bool = False):
         params = pypatchworkpp.Parameters()
         params.verbose = args.verbose
         params.enable_RNR = False
@@ -45,7 +45,10 @@ class GroundRemoval:
         self.patchwork = pypatchworkpp.patchworkpp(params)
 
         self.data_dir = Path(args.data_root) / args.dataset
-        self.save_dir = Path(args.save_dir) if args.save_dir is not None else None
+        if standalone:
+            self.save_dir = Path(args.save_dir) if args.save_dir is not None else None
+        else:
+            self.save_dir = None
         self.args = args
 
     def _read_pcd(self, pcd_path: Union[str, Path]) -> np.ndarray:
@@ -125,12 +128,13 @@ class GroundRemoval:
             if self.args.visualize:
                 self._visualize()
 
-            save_name = (
-                files[idx].stem
-                if self.args.dataset == "scala3"
-                else f"{files.stem}_{idx:04d}"
-            )
-            self._save_xyz(save_name)
+            if self.save_dir is not None:
+                save_name = (
+                    files[idx].stem
+                    if self.args.dataset == "scala3"
+                    else f"{files.stem}_{idx:04d}"
+                )
+                self._save_xyz(save_name)
 
     def run_individual_file(self, file_name: str) -> np.ndarray:
         """
@@ -152,7 +156,7 @@ class GroundRemoval:
 
         return self.patchwork.getNonground()
 
-    def run_individual_data(self, pcd: np.ndarray) -> np.ndarray:
+    def run_individual_scan(self, pcd: np.ndarray) -> np.ndarray:
         """
         Run the ground removal algorithm on a given point cloud data
 

@@ -42,9 +42,8 @@ class Visualizer:
     def load_pcd(self, pcd_path: str) -> np.ndarray:
         if self.args.dataset == "scala3":
             if self.args.processed:
-                pcd = np.load(pcd_path, allow_pickle=True)["raw_points"][
-                    self.args.index
-                ]
+                pcd = np.load(pcd_path, allow_pickle=True)
+                pcd = pcd["raw_points"][pcd["time_indice"] == self.args.index]
             else:
                 pcd = np.load(pcd_path, allow_pickle=True)["arr_0"].item()["pc"][:, :3]
         elif self.args.dataset == "pone":
