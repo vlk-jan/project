@@ -61,8 +61,11 @@ class Dataset_creator:
             )
 
     def _load_pcd(self, file_name: str) -> np.ndarray:
-        path = Path(self.args.data_root) / self.args.dataset / (file_name + ".npz")
-        pcd = np.load(path, allow_pickle=True)["arr_0"].item()["pc"][:, :3]
+        if self.args.dataset == "pone":
+            raise NotImplementedError("PONE dataset is not supported yet")
+        else:
+            path = Path(self.args.data_root) / self.args.dataset / (file_name + ".npz")
+            pcd = np.load(path, allow_pickle=True)["arr_0"].item()["pc"][:, :3]
         return pcd
 
     def _load_nonground(self, file_name: str) -> np.ndarray:
