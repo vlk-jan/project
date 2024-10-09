@@ -56,9 +56,7 @@ def load_pcd(
     return pcd
 
 
-def visualize(args: argparse.Namespace) -> None:
-    xyz = load_pcd(args.pcd_path, args.dataset, args.index, args.processed)
-
+def visualize(xyz: np.ndarray) -> None:
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(xyz)
 
@@ -68,4 +66,5 @@ def visualize(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     args = parse_args()
 
-    visualize(args)
+    xyz = load_pcd(args.pcd_path, args.dataset, args.index, args.processed)
+    visualize(xyz)
