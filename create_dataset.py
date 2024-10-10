@@ -8,8 +8,6 @@ from pathlib import Path
 import tqdm
 import numpy as np
 
-from ground_removal import GroundRemoval
-
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -33,6 +31,7 @@ def parse_args():
         default="scala3",
         help="Name of the dataset, default: scala3",
     )
+    parser.add_argument("--verbose", action="store_true", help="Print verbose messages")
 
     return parser.parse_args()
 
@@ -40,19 +39,41 @@ def parse_args():
 class Dataset_creator:
     def __init__(self, args):
         self.args = args
-        self.ground_removal = GroundRemoval(Path(args.data_root) / args.dataset)
+
+        self.file_list = sorted(
+            (Path(self.args.data_root) / self.args.dataset).glob("*.npz")
+        )
+
+        if args.dataset == "scala3":
+            pass
+        elif args.dataset == "pone":
+            self.pone_data = np.load(
+                Path(args.data_root) / args.dataset / self.file_list[0],
+                allow_pickle=True,
+            )
+        else:
+            raise ValueError(f"Unknown dataset: {args.dataset}")
+
+        if args.data_nonground is None:
+            from ground_removal import GroundRemoval
+
+            self.ground_removal = GroundRemoval(args, standalone=True)
+
+        self.ego_poses = self._load_ego_poses()
 
     def run(self):
-        file_num = len(list((Path(args.data_root) / args.dataset).glob("*.npz")))
-        file_num = np.round(file_num / args.num_frames).astype(int) * args.num_frames
+        proc_num = (
+            np.round(self.ego_poses.shape[0] / self.args.num_frames).astype(int)
+            * self.args.num_frames
+        )
 
-        for idx in tqdm.tqdm(range(0, file_num, args.num_frames)):
+        for idx in tqdm.tqdm(range(0, proc_num, self.args.num_frames)):
             data = self._create_dataframe(idx)
 
             file_name = (
-                Path(args.data_root).resolve()
-                / f"{args.dataset}_processed"
-                / f"{args.dataset}_data_{idx}.npz"
+                Path(self.args.data_root).resolve()
+                / f"{self.args.dataset}_processed"
+                / f"{self.args.dataset}_data_{idx // self.args.num_frames:03d}.npz"
             )
             file_name.parent.mkdir(exist_ok=True, parents=True)
             np.savez_compressed(
@@ -60,65 +81,90 @@ class Dataset_creator:
                 **data,
             )
 
-    def _load_pcd(self, file_name: str) -> np.ndarray:
-        if self.args.dataset == "pone":
-            raise NotImplementedError("PONE dataset is not supported yet")
-        else:
-            path = Path(self.args.data_root) / self.args.dataset / (file_name + ".npz")
+    def _load_pcd(self, idx: int) -> np.ndarray:
+        if self.args.dataset == "scala3":
+            path = (
+                Path(self.args.data_root)
+                / self.args.dataset
+                / (self.file_list[idx].stem + ".npz")
+            )
             pcd = np.load(path, allow_pickle=True)["arr_0"].item()["pc"][:, :3]
+        elif self.args.dataset == "pone":
+            pcd = np.concatenate(
+                [
+                    self.pone_data["scan_list"][idx]["x"],
+                    self.pone_data["scan_list"][idx]["z"].reshape(-1, 1),
+                ],
+                axis=1,
+            )
+        else:
+            raise ValueError(f"Unknown dataset: {self.args}")
+
         return pcd
 
-    def _load_nonground(self, file_name: str) -> np.ndarray:
+    def _load_nonground(self, idx: int) -> np.ndarray:
         if self.args.data_nonground is None:
-            nonground = self.ground_removal.run_individual(file_name + ".npz")
+            nonground = self.ground_removal.run_individual_scan(self._load_pcd(idx))
         else:
+            file_name = (
+                self.file_list[idx].stem
+                if self.args.dataset == "scala3"
+                else f"{self.file_list[0].stem}_{idx:04d}"
+            )
             path = Path(self.args.data_nonground) / (file_name + "_nonground.xyz")
             nonground = np.loadtxt(path)
         return nonground
 
-    def _load_ego_pose(self, path: Path, idx: int) -> np.ndarray:
-        pose = np.load(path, allow_pickle=True)[idx]
-        return pose
+    def _load_ego_poses(self) -> np.ndarray:
+        if self.args.dataset == "scala3":
+            path = (
+                Path(__file__).parent.resolve()
+                / "results"
+                / "latest"
+                / f"{args.dataset}_xyz_poses.npy"
+            )
+            poses = np.load(path, allow_pickle=True)
+        elif self.args.dataset == "pone":
+            poses = self.pone_data["odom_list"]
+        else:
+            raise ValueError(f"Unknown dataset: {self.args}")
+        return poses
 
     def _create_dataframe(self, start_idx: int) -> Dict:
         data = {
             "raw_points": np.array([]),
             "time_indice": np.array([]),
-            "nonground": np.array([]),
+            "nonground": list(),
             "ego_poses": np.array([]),
         }
+
         for i in range(args.num_frames):
-            # Get the file name
-            file_name = sorted(
-                (Path(self.args.data_root) / self.args.dataset).glob("*.npz")
-            )[start_idx + i].stem
+            print(f"{args.num_frames - i} . . . ", end="")
 
             # Load data
-            pcd = self._load_pcd(file_name)
-            nonground = self._load_nonground(file_name)
-            ego_pose = (  # later replace with ego motion from odometry
-                self._load_ego_pose(
-                    Path(__file__).parent.resolve()
-                    / "results"
-                    / "latest"
-                    / f"{args.dataset}_xyz_poses.npy",
-                    start_idx + i,
-                ).reshape(1, 4, 4),
+            pcd = self._load_pcd(start_idx + i)
+            nonground = self._load_nonground(start_idx + i)
+            ego_pose = (
+                self.ego_poses[start_idx + i].reshape(1, 4, 4)
+                if self.args.dataset == "scala3"
+                else self.ego_poses[start_idx + i]["transformation"].reshape(1, 4, 4)
             )
 
             # Store data
             if i == 0:
                 data["raw_points"] = pcd
                 data["time_indice"] = np.full(pcd.shape[0], i)
-                data["nonground"] = nonground
+                data["nonground"].append(nonground)
                 data["ego_poses"] = ego_pose
             else:
                 data["raw_points"] = np.concatenate((data["raw_points"], pcd))
                 data["time_indice"] = np.concatenate(
                     (data["time_indice"], np.full(pcd.shape[0], i))
                 )
-                data["nonground"] = np.concatenate((data["nonground"], nonground))
+                data["nonground"].append(nonground)
                 data["ego_poses"] = np.concatenate((data["ego_poses"], ego_pose))
+        data["nonground"] = np.array(data["nonground"], dtype=object)
+
         return data
 
 
