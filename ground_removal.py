@@ -1,8 +1,9 @@
 #!/bin/bash/env python3
 # -*- coding: utf-8 -*-
 
+import argparse
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union
 
 import tqdm
 import numpy as np
@@ -10,22 +11,45 @@ import open3d as o3d
 import pypatchworkpp
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Ground Removal")
+
+    parser.add_argument(
+        "--data_root", type=str, required=True, help="Path to the root data directory"
+    )
+    parser.add_argument(
+        "--save_dir",
+        type=str,
+        help="Path to save the results, if not specified, the results will be saved in <data_dir>_xyz",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="scala3",
+        help="Name of the dataset, default: scala3",
+    )
+    parser.add_argument("--verbose", action="store_true", help="Print verbose messages")
+    parser.add_argument(
+        "--visualize", action="store_true", help="Visualize the results"
+    )
+
+    return parser.parse_args()
+
+
 class GroundRemoval:
-    def __init__(
-        self,
-        data_dir: Union[str, Path],
-        save_dir: Optional[Union[str, Path]] = None,
-        verbose: bool = False,
-        visualize: bool = False,
-    ):
+    def __init__(self, args: argparse.Namespace, standalone: bool = False):
         params = pypatchworkpp.Parameters()
-        params.verbose = verbose
+        params.verbose = args.verbose
         params.enable_RNR = False
 
         self.patchwork = pypatchworkpp.patchworkpp(params)
-        self.data_dir = Path(data_dir)
-        self.save_dir = Path(save_dir) if save_dir is not None else None
-        self.visualize = visualize
+
+        self.data_dir = Path(args.data_root) / args.dataset
+        if standalone:
+            self.save_dir = Path(args.save_dir) if args.save_dir is not None else None
+        else:
+            self.save_dir = None
+        self.args = args
 
     def _read_pcd(self, pcd_path: Union[str, Path]) -> np.ndarray:
         """
@@ -38,9 +62,113 @@ class GroundRemoval:
         :return: np.ndarray:
             Point cloud data
         """
-        pcd = np.load(pcd_path, allow_pickle=True)["arr_0"].item()
+        if self.args.dataset == "scala3":
+            pcd = np.load(pcd_path, allow_pickle=True)["arr_0"].item()["pc"][:, :3]
+        elif self.args.dataset == "pone":
+            pcd = np.load(pcd_path, allow_pickle=True)["scan_list"]
+        else:
+            raise ValueError(f"Unsupported dataset: {self.args.dataset}")
 
-        return pcd["pc"]
+        return pcd
+
+    def _save_xyz(self, file_name: Union[str, Path]) -> None:
+        """
+        Save the nonground points to a file in XYZ format
+
+        :param Union[str,Path] file_name:
+            Name of the file to save the nonground points
+        """
+        save_dir = (
+            self.save_dir
+            if self.save_dir is not None
+            else self.data_dir.parent / (self.args.dataset + "_xyz")
+        )
+        save_dir.mkdir(parents=True, exist_ok=True)
+        np.savetxt(
+            save_dir / f"{file_name}_nonground.xyz",
+            self.patchwork.getNonground(),
+            fmt="%.6f",
+        )
+
+    def _prep_pone(self, data: np.ndarray) -> np.ndarray:
+        """
+        Prepare the point cloud data for the PONE dataset
+
+        :param np.ndarray data:
+            Point cloud data
+
+        :return: np.ndarray:
+            Prepared point cloud data
+        """
+        pcd = np.concatenate([data["x"], data["z"].reshape(-1, 1)], axis=1)
+        return pcd
+
+    def run(self) -> None:
+        """
+        Run the ground removal algorithm, save the results as .xyz files
+        """
+        if self.args.dataset == "scala3":
+            files = sorted(self.data_dir.glob("*.npz"))
+            pcd_count = len(files)
+        elif self.args.dataset == "pone":
+            files = sorted(self.data_dir.glob("*PCD.npz"))[0]
+            data = self._read_pcd(files)
+            pcd_count = data.shape[0]
+        else:
+            raise ValueError(f"Unsupported dataset: {self.args.dataset}")
+
+        for idx in tqdm.tqdm(range(pcd_count)):
+            pcd = (
+                self._read_pcd(files[idx])
+                if self.args.dataset == "scala3"
+                else self._prep_pone(data[idx])
+            )
+            self.patchwork.estimateGround(pcd)
+
+            if self.args.visualize:
+                self._visualize()
+
+            if self.save_dir is not None:
+                save_name = (
+                    files[idx].stem
+                    if self.args.dataset == "scala3"
+                    else f"{files.stem}_{idx:04d}"
+                )
+                self._save_xyz(save_name)
+
+    def run_individual_file(self, file_name: str) -> np.ndarray:
+        """
+        Run the ground removal algorithm on a single point cloud file
+
+        :param str file_name:
+            Name of the point cloud file
+
+        :return: np.ndarray:
+            Nonground points
+        """
+        if self.args.dataset != "scala3":
+            raise ValueError(f"Unsupported dataset: {self.args.dataset}")
+
+        full_pcd = self._read_pcd(self.data_dir / file_name)
+        pcd = full_pcd[:, :3]
+
+        self.patchwork.estimateGround(pcd)
+
+        return self.patchwork.getNonground()
+
+    def run_individual_scan(self, pcd: np.ndarray) -> np.ndarray:
+        """
+        Run the ground removal algorithm on a given point cloud data
+
+        :param np.ndarray pcd:
+            Point cloud data
+
+        :return: np.ndarray:
+            Nonground points
+        """
+        self.patchwork.estimateGround(pcd)
+
+        return self.patchwork.getNonground()
 
     def _visualize(self) -> None:
         """
@@ -101,86 +229,9 @@ class GroundRemoval:
         vis.run()
         vis.destroy_window()
 
-    # def _save_results(self, pcd: np.ndarray, file_name: Union[str, Path]) -> None:
-    #     """
-    #     Save the nonground points to a file
-    #
-    #     :param np.ndarray pcd:
-    #         Point cloud data
-    #     :param Union[str,Path] file_name:
-    #         Name of the file to save the nonground points
-    #     """
-    #     self.save_dir.mkdir(parents=True, exist_ok=True)
-    #     np.savez_compressed(
-    #         self.save_dir / f"{file_name}_nonground.npz",
-    #         pcd[self.patchwork.getNongroundIndices()],
-    #     )
-
-    def _save_xyz(self, file_name: Union[str, Path]) -> None:
-        """
-        Save the nonground points to a file in XYZ format
-
-        :param Union[str,Path] file_name:
-            Name of the file to save the nonground points
-        """
-        save_dir = (
-            self.save_dir
-            if self.save_dir is not None
-            else self.data_dir.parent / (self.data_dir.stem + "_xyz")
-        )
-        save_dir.mkdir(parents=True, exist_ok=True)
-        np.savetxt(
-            save_dir / f"{file_name}_nonground.xyz",
-            self.patchwork.getNonground(),
-            fmt="%.6f",
-        )
-
-    def run(self) -> None:
-        """
-        Run the ground removal algorithm, save the results as .xyz files
-        """
-        for pcd_path in tqdm.tqdm(sorted(self.data_dir.glob("*.npz"))):
-            full_pcd = self._read_pcd(pcd_path)
-            pcd = full_pcd[:, :3]
-            self.patchwork.estimateGround(pcd)
-
-            if self.visualize:
-                self._visualize()
-
-            # if self.save_dir is not None:
-            #     self._save_results(full_pcd, pcd_path.stem)
-            self._save_xyz(pcd_path.stem)
-
 
 if __name__ == "__main__":
-    import argparse
-
-    def parse_args():
-        parser = argparse.ArgumentParser(description="Ground Removal")
-
-        parser.add_argument(
-            "--data_dir",
-            type=str,
-            required=True,
-            help="Path to the directory containing point clouds",
-        )
-        parser.add_argument(
-            "--save_dir",
-            type=str,
-            help="Path to save the results, if not specified, the results will be saved in <data_dir>_xyz",
-        )
-        parser.add_argument(
-            "-d", "--debug", action="store_true", help="Print verbose messages"
-        )
-        parser.add_argument(
-            "-v", "--visualize", action="store_true", help="Visualize the results"
-        )
-
-        return parser.parse_args()
-
     args = parse_args()
-    ground_removal = GroundRemoval(
-        args.data_dir, args.save_dir, args.debug, args.visualize
-    )
+    ground_removal = GroundRemoval(args)
 
     nonground = ground_removal.run()
