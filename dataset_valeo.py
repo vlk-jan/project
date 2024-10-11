@@ -1,13 +1,16 @@
-import os
 import numpy as np
+from pathlib import Path
+
 from utils_helper import transform_points
 from utils_cluster import cluster_pcd
 
 
-class Dataset_pca:
+class Dataset_valeo:
     def __init__(self, args):
         self.args = args
-        self.seq_paths = os.listdir(self.args.root + self.args.dataset + "_processed")
+        self.path = Path(self.args.root) / (self.args.dataset + "_processed")
+        files = sorted(self.path.glob("*.npz"))
+        self.seq_paths = [self.path / f"{file}" for file in files]
         print(f"number of test sequences: {len(self.seq_paths)}")
 
     def load_data_pca(self, data_path):
@@ -19,17 +22,17 @@ class Dataset_pca:
         """
         data = np.load(data_path, allow_pickle=True)
         raw_points, time_indice = data["raw_points"], data["time_indice"]
-        ego_motion_gt, nonground = data["ego_poses"], data["nonground"]
+        ego_poses, nonground = data["ego_poses"], data["nonground"]
 
         assert raw_points.shape[0] == time_indice.shape[0]
-        assert ego_motion_gt.shape[0] == len(np.unique(time_indice))
+        assert ego_poses.shape[0] == len(np.unique(time_indice))
         assert len(np.unique(time_indice)) == max(time_indice) + 1
         assert max(time_indice) + 1 == self.args.num_frames
 
         data = {
             "raw_points": raw_points,
             "time_indice": time_indice,
-            "ego_motion_gt": ego_motion_gt,
+            "ego_motion_gt": ego_poses,
             "nonground": nonground,
             "data_path": data_path,
         }
@@ -43,14 +46,16 @@ class Dataset_pca:
         labels_dst = []
         for j in range(1, self.args.num_frames):
             # print(f'calculate scence flow between {j} and {0}')
-            point_dst = data["raw_points"][data["time_indice"] == 0, 0:3]
-            point_src = data["raw_points"][data["time_indice"] == j, 0:3]
-            pose = data["ego_poses"][j]
+            point_dst = data["raw_points"][data["time_indice"] == 0]
+            point_src = data["raw_points"][data["time_indice"] == j]
+            pose = data["ego_motion_gt"][j]
             point_src_ego = transform_points(point_src, pose)
             points_tmp = np.concatenate([point_dst, point_src_ego], axis=0)
 
-            nonground_dst = data["nonground"][data["time_indice"] == 0]
-            nonground_src = data["nonground"][data["time_indice"] == j]
+            nonground_dst = np.zeros((len(point_dst))).astype(bool)
+            nonground_dst[data["nonground"][0]] = True
+            nonground_src = np.zeros((len(point_src))).astype(bool)
+            nonground_src[data["nonground"][j]] = True
             nonground_tmp = np.concatenate([nonground_dst, nonground_src], axis=0)
             label_tmp = cluster_pcd(self.args, points_tmp, nonground_tmp)
             label_src = label_tmp[len(point_dst) :]
