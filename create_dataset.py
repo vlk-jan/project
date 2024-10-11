@@ -115,7 +115,7 @@ class Dataset_creator:
             )
             path = Path(self.args.data_nonground) / (file_name + "_nonground.xyz")
             nonground = np.loadtxt(path)[:, -1]
-        return nonground
+        return nonground.astype(int)
 
     def _load_ego_poses(self) -> np.ndarray:
         if self.args.dataset == "scala3":
