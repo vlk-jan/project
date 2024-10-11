@@ -3,7 +3,7 @@
 
 import argparse
 from pathlib import Path
-from typing import Union
+from typing import Union, Tuple
 
 import tqdm
 import numpy as np
@@ -84,9 +84,16 @@ class GroundRemoval:
             else self.data_dir.parent / (self.args.dataset + "_xyz")
         )
         save_dir.mkdir(parents=True, exist_ok=True)
+        save_data = np.concatenate(
+            [
+                self.patchwork.getNonground(),
+                self.patchwork.getNongroundIndices().reshape(-1, 1),
+            ],
+            axis=1,
+        )
         np.savetxt(
             save_dir / f"{file_name}_nonground.xyz",
-            self.patchwork.getNonground(),
+            save_data,
             fmt="%.6f",
         )
 
@@ -128,15 +135,14 @@ class GroundRemoval:
             if self.args.visualize:
                 self._visualize()
 
-            if self.save_dir is not None:
-                save_name = (
-                    files[idx].stem
-                    if self.args.dataset == "scala3"
-                    else f"{files.stem}_{idx:04d}"
-                )
-                self._save_xyz(save_name)
+            save_name = (
+                files[idx].stem
+                if self.args.dataset == "scala3"
+                else f"{files.stem}_{idx:04d}"
+            )
+            self._save_xyz(save_name)
 
-    def run_individual_file(self, file_name: str) -> np.ndarray:
+    def run_individual_file(self, file_name: str) -> Tuple[np.ndarray, np.ndarray]:
         """
         Run the ground removal algorithm on a single point cloud file
 
@@ -154,9 +160,9 @@ class GroundRemoval:
 
         self.patchwork.estimateGround(pcd)
 
-        return self.patchwork.getNonground()
+        return self.patchwork.getNonground(), self.patchwork.getNongroundIndices()
 
-    def run_individual_scan(self, pcd: np.ndarray) -> np.ndarray:
+    def run_individual_scan(self, pcd: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Run the ground removal algorithm on a given point cloud data
 
@@ -168,7 +174,7 @@ class GroundRemoval:
         """
         self.patchwork.estimateGround(pcd)
 
-        return self.patchwork.getNonground()
+        return self.patchwork.getNonground(), self.patchwork.getNongroundIndices()
 
     def _visualize(self) -> None:
         """

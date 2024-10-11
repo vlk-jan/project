@@ -106,7 +106,7 @@ class Dataset_creator:
 
     def _load_nonground(self, idx: int) -> np.ndarray:
         if self.args.data_nonground is None:
-            nonground = self.ground_removal.run_individual_scan(self._load_pcd(idx))
+            nonground = self.ground_removal.run_individual_scan(self._load_pcd(idx))[1]
         else:
             file_name = (
                 self.file_list[idx].stem
@@ -114,7 +114,7 @@ class Dataset_creator:
                 else f"{self.file_list[0].stem}_{idx:04d}"
             )
             path = Path(self.args.data_nonground) / (file_name + "_nonground.xyz")
-            nonground = np.loadtxt(path)
+            nonground = np.loadtxt(path)[:, -1]
         return nonground
 
     def _load_ego_poses(self) -> np.ndarray:
