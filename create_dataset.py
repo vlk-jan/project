@@ -51,6 +51,7 @@ class Dataset_creator:
                 Path(args.data_root) / args.dataset / self.file_list[0],
                 allow_pickle=True,
             )
+            self.scan_data = self.pone_data["scan_list"]
         else:
             raise ValueError(f"Unknown dataset: {args.dataset}")
 
@@ -60,6 +61,7 @@ class Dataset_creator:
             self.ground_removal = GroundRemoval(args, standalone=True)
 
         self.ego_poses = self._load_ego_poses()
+        del self.pone_data
 
     def run(self):
         proc_num = (
@@ -92,8 +94,8 @@ class Dataset_creator:
         elif self.args.dataset == "pone":
             pcd = np.concatenate(
                 [
-                    self.pone_data["scan_list"][idx]["x"],
-                    self.pone_data["scan_list"][idx]["z"].reshape(-1, 1),
+                    self.scan_data[idx]["x"],
+                    self.scan_data[idx]["z"].reshape(-1, 1),
                 ],
                 axis=1,
             )
@@ -139,8 +141,6 @@ class Dataset_creator:
         }
 
         for i in range(args.num_frames):
-            print(f"{args.num_frames - i} . . . ", end="")
-
             # Load data
             pcd = self._load_pcd(start_idx + i)
             nonground = self._load_nonground(start_idx + i)
