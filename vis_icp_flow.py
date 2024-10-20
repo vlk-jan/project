@@ -29,6 +29,9 @@ def parse_args():
         default=5,
         help="Number of frames to be considered, default: 5",
     )
+    parser.add_argument(
+        "--save", action="store_true", default=False, help="Save the flow data"
+    )
 
     return parser.parse_args()
 
@@ -83,6 +86,15 @@ def load_flow(args: argparse.Namespace, idx: int) -> Dict:
     return data["scene_flow"]
 
 
+def save(point_src, point_dst, flow, idx):
+    np.savez_compressed(
+        f"flow_vis/flow_{idx}.npz",
+        point_src=point_src,
+        point_dst=point_dst,
+        flow=flow,
+    )
+
+
 def main(args: argparse.Namespace):
     data_path = Path(args.root_dir) / (args.dataset + "_flow")
     for idx in range(len(list(data_path.glob("*.npz")))):
@@ -99,6 +111,9 @@ def main(args: argparse.Namespace):
             flow = flow_data[start:end]
 
             start += len(point_src)
+
+            if args.save:
+                save(point_src, point_dst, flow, f"{idx}_{j}")
 
             visualize_flow(point_src, flow, title=f"flow: {j} vs {0}")
 
